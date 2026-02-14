@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+models/*.joblib
+models/*.csv
+data/audio_spam/
+data/audio_normal/
