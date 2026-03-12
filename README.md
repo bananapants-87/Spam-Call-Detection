@@ -69,6 +69,12 @@ Then train:
 python -m src.train_audio
 ```
 
+If you do not yet have real clips, train with synthetic demo audio:
+
+```bash
+python -m src.train_audio --bootstrap-demo
+```
+
 Output:
 - `models/audio_model.joblib`
 

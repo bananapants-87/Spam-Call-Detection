@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 from tempfile import NamedTemporaryFile
 
 import streamlit as st
@@ -14,6 +15,9 @@ st.caption("Behavior + first 5-10 seconds of audio")
 
 behavior_model_path = Path("models/behavior_model.joblib")
 audio_model_path = Path("models/audio_model.joblib")
+
+ffmpeg_available = shutil.which("ffmpeg") is not None
+audio_upload_types = ["wav", "flac", "ogg"] if not ffmpeg_available else ["wav", "mp3", "flac", "ogg", "m4a"]
 
 detector = SpamDetector(behavior_model_path, audio_model_path)
 
@@ -31,22 +35,34 @@ with col1:
 
 with col2:
     st.subheader("2) Audio Input")
-    uploaded_audio = st.file_uploader("Upload first 5-10 seconds audio", type=["wav", "mp3", "flac", "ogg", "m4a"])
+    uploaded_audio = st.file_uploader("Upload first 5-10 seconds audio", type=audio_upload_types)
+    if not ffmpeg_available:
+        st.caption("FFmpeg not found. MP3/M4A uploads are disabled; use WAV/FLAC/OGG.")
 
 st.subheader("3) Inference")
 if st.button("Predict Spam Probability"):
     b_score = detector.behavior_score(behavior_values) if detector.behavior_model else None
     a_score = None
+    audio_error: str | None = None
 
     if uploaded_audio is not None and detector.audio_model:
         suffix = Path(uploaded_audio.name).suffix or ".wav"
         with NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(uploaded_audio.read())
             tmp_path = Path(tmp.name)
-        a_score = detector.audio_score(tmp_path)
+        try:
+            a_score = detector.audio_score(tmp_path)
+        except Exception as exc:
+            audio_error = str(exc)
 
     if b_score is None and a_score is None:
-        st.error("No model available. Train behavior/audio model first.")
+        if audio_error:
+            st.error(
+                "Audio could not be processed. Upload WAV/FLAC/OGG or install FFmpeg for MP3/M4A support."
+            )
+            st.caption(audio_error)
+        else:
+            st.error("No model available. Train behavior/audio model first.")
     else:
         final = ensemble_score(b_score, a_score)
         st.metric("Final spam probability", f"{100 * final:.2f}%")
@@ -55,6 +71,9 @@ if st.button("Predict Spam Probability"):
             st.write(f"Behavior score: {b_score:.3f}")
         if a_score is not None:
             st.write(f"Audio score: {a_score:.3f}")
+        elif audio_error:
+            st.warning("Audio score unavailable for this file format in current environment.")
+            st.caption(audio_error)
 
         if final >= 0.7:
             st.error("High risk: likely spam")

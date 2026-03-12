@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import audioread
 import librosa
 import numpy as np
 
@@ -20,7 +21,13 @@ DEFAULT_AUDIO_CONFIG = AudioFeatureConfig()
 def load_audio_segment(audio_path: str | Path, config: AudioFeatureConfig = DEFAULT_AUDIO_CONFIG) -> np.ndarray:
     """Load and pad/crop to fixed duration."""
     max_samples = config.sample_rate * config.duration_seconds
-    signal, _ = librosa.load(audio_path, sr=config.sample_rate, mono=True)
+    try:
+        signal, _ = librosa.load(audio_path, sr=config.sample_rate, mono=True)
+    except audioread.exceptions.NoBackendError as exc:
+        raise ValueError(
+            "Unable to decode this audio file in the current environment. "
+            "Use WAV/FLAC/OGG, or install FFmpeg for MP3/M4A support."
+        ) from exc
 
     if signal.shape[0] < max_samples:
         signal = np.pad(signal, (0, max_samples - signal.shape[0]))
